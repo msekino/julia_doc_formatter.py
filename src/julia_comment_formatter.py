@@ -279,12 +279,18 @@ def extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg
         
         for arg_name in arg_names:
             if re.match('^-\s`?'+ arg_name +':', line):
-                arg_comments[arg_name] = line[line.rfind(':') + 1:]
+                i1 = line.rfind('::')
+                i2 = line.rfind(':')                
+                if i2 > i1 + 1:
+                    arg_comments[arg_name] = line[line.rfind(':') + 1:]
                 break
 
         for arg_name in kwarg_names:
             if re.match('^-\s`?(; )?'+ arg_name +':', line):
-                arg_comments[arg_name] = line[line.rfind(':') + 1:]
+                i1 = line.rfind('::')
+                i2 = line.rfind(':')                
+                if i2 > i1 + 1:
+                    arg_comments[arg_name] = line[line.rfind(':') + 1:]
                 break
 
     return arg_comments
