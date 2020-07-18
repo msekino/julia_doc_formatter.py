@@ -17,8 +17,6 @@ def format_comments(text, lenthres = 80):
             re.match('^\s*function', line) is not None or \
             re.match('^\S+\(', line) is not None
 
-        print(f"{iline}, {isfunc}, {iline_comment_head}, {iline_comment_tail}")
-
         if isfunc:
             signature, arg_names, arg_types, kwarg_names, kwarg_types, return_type \
                 = extract_signature(lines_orig, iline)
@@ -87,12 +85,10 @@ def extract_signature(lines, iline):
                 if stack == 0:
                     return_type = extract_return_type(line[i+1:])
                     break             
-                    
         if stack == 0:
             break
-            
         iline += 1
-        line = re.sub('^\s+', '' if line[len(line)-1:] == '(' else ' ', lines[iline])
+        line = re.sub('^\s+', '' if line[len(line)-1] == '(' else ' ', lines[iline])
 
     if signature[len(signature)-2:] == ',)':
         signature = signature[:len(signature)-2] + ')'
@@ -192,15 +188,18 @@ def shorten_signature(signature, arg_types, kwarg_types, return_type, lenthres):
     if len(signature) <= lenthres:
         return signature, contains_type
 
+    contains_type = False
+        
     for arg_type in arg_types.values():
         signature = signature.replace('::'+ arg_type, '')
 
     for arg_type in kwarg_types.values():
         signature = signature.replace('::'+ arg_type, '')
+        
+    signature = signature[0:signature.rfind(')')] + ')::'+ return_type
 
-    contains_type = False
-
-    if len(signature) <= lenthres:
+    kwarg_names = kwarg_types.keys()        
+    if len(signature) <= lenthres or len(', '.join(kwarg_names)) < len('<keyword arguments>'):
         return signature, contains_type
 
     return signature[0:signature.find(';')] + '; <keyword arguments>)::'+ return_type, contains_type
@@ -223,26 +222,28 @@ def make_comment_lines(signature, contains_type, arg_names, arg_types, kwarg_nam
         if re.match('\s+', line) is None:
             comment_lines.append(line)
 
-    comment_lines.append("")
-    comment_lines.append("# Arguments")
+    if comment_lines[len(comment_lines)-1] != '':
+        comment_lines.append('')
+
+    comment_lines.append('# Arguments')
     
     for arg_name in arg_names:
         comment = arg_comments[arg_name] if arg_name in arg_comments else ' '
 
         arg_type = arg_types[arg_name]
         if contains_type:
-            comment_lines.append("- `"+ arg_name +"::"+ arg_type +"`:"+ comment)
+            comment_lines.append('- `'+ arg_name +'::'+ arg_type +'`:'+ comment)
         else:
-            comment_lines.append("- "+ arg_name +":"+ comment)
+            comment_lines.append('- '+ arg_name +':'+ comment)
             
     for arg_name in kwarg_names:
         comment = arg_comments[arg_name] if arg_name in arg_comments else ' '
         
         arg_type = kwarg_types[arg_name]
         if contains_type:
-            comment_lines.append("- `; "+ arg_name +"::"+ arg_type +"`:"+ comment)
+            comment_lines.append('- `; '+ arg_name +'::'+ arg_type +'`:'+ comment)
         else:
-            comment_lines.append("- ; "+ arg_name +":"+ comment)
+            comment_lines.append('- ; '+ arg_name +':'+ comment)
     
     return_comment_added = False
 
