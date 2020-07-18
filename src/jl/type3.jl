@@ -1,7 +1,3 @@
-
-
-
-
 function discretize(
     x::Vector{Tx},
     y::Vector{Ty},
