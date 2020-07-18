@@ -2,7 +2,7 @@ import re
 import sys
 
 
-def format_comments(text, lenthres = 80):
+def format_comments(text, thres_len = 92):
     lines_orig = re.split('\n', text)
     lines_edited = []
 
@@ -22,7 +22,7 @@ def format_comments(text, lenthres = 80):
                 = extract_signature(lines_orig, iline)
 
             signature, contains_type \
-                = shorten_signature(signature, arg_types, kwarg_types, return_type, lenthres)
+                = shorten_signature(signature, arg_types, kwarg_types, return_type, thres_len)
 
             comment_lines = make_comment_lines(
                 signature,
@@ -182,10 +182,10 @@ def extract_arguments(signature):
     return arg_names, arg_types, kwarg_names, kwarg_types
 
 
-def shorten_signature(signature, arg_types, kwarg_types, return_type, lenthres):
+def shorten_signature(signature, arg_types, kwarg_types, return_type, thres_len):
     contains_type = True
 
-    if len(signature) <= lenthres:
+    if len(signature) <= thres_len:
         return signature, contains_type
 
     contains_type = False
@@ -199,7 +199,7 @@ def shorten_signature(signature, arg_types, kwarg_types, return_type, lenthres):
     signature = signature[0:signature.rfind(')')] + ')::'+ return_type
 
     kwarg_names = kwarg_types.keys()        
-    if len(signature) <= lenthres or len(', '.join(kwarg_names)) < len('<keyword arguments>'):
+    if len(signature) <= thres_len or len(', '.join(kwarg_names)) < len('<keyword arguments>'):
         return signature, contains_type
 
     return signature[0:signature.find(';')] + '; <keyword arguments>)::'+ return_type, contains_type
@@ -278,12 +278,12 @@ def extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg
             continue
         
         for arg_name in arg_names:
-            if re.match('^-\s'+ arg_name +':', line) or re.match('^-\s`'+ arg_name +':', line):
+            if re.match('^-\s`?'+ arg_name +':', line):
                 arg_comments[arg_name] = line[line.rfind(':') + 1:]
                 break
 
         for arg_name in kwarg_names:
-            if re.match('^-\s'+ arg_name +':', line) or re.match('^-\s`'+ arg_name +':', line):
+            if re.match('^-\s`?(; )?'+ arg_name +':', line):
                 arg_comments[arg_name] = line[line.rfind(':') + 1:]
                 break
 
@@ -292,8 +292,10 @@ def extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg
 
 def main():
     file = sys.argv[1]
+    thres_len = int(sys.argv[2]) if len(sys.argv) >= 3 else 92
+    
     with open(file, encoding='utf-8') as f:
-        text = format_comments(f.read())
+        text = format_comments(f.read(), thres_len)
     with open(file, 'w', encoding='utf-8') as f:
         f.write(text)
 
