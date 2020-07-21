@@ -11,27 +11,29 @@ def format_comments(text, thres_len = 92):
     iline = 0
 
     while iline < len(lines_orig):
-        # 関数の検知
+        # Detect the first line of a function
         line = lines_orig[iline]
         isfunc = \
+            iline_comment_tail > -1 or \
             re.match('^\s*function', line) is not None or \
             re.match('^\S+\(', line) is not None
 
         if isfunc:
-            signature, arg_names, arg_types, kwarg_names, kwarg_types, return_type \
+            signature, arg_names, arg_types, kwarg_names, kwarg_types, return_types \
                 = extract_signature(lines_orig, iline)
 
             signature, contains_type \
-                = shorten_signature(signature, arg_types, kwarg_types, return_type, thres_len)
+                = shorten_signature(signature, arg_types, kwarg_types, thres_len)
 
             comment_lines = make_comment_lines(
                 signature,
-                not contains_type,  # signatureにtypeが含まれたら、commentには記載しない
+                # If the signature contains types, the comment don't contain the types.
+                not contains_type,
                 arg_names,
                 arg_types,
                 kwarg_names,
                 kwarg_types,
-                return_type,
+                return_types,
                 lines_orig,
                 iline_comment_head,
                 iline_comment_tail
@@ -47,7 +49,7 @@ def format_comments(text, thres_len = 92):
             iline_comment_head = -1
             iline_comment_tail = -1
 
-            # コメント開始の検知
+            # Detect the first line of a comment
             if re.match('^"""\s*', lines_orig[iline]) is None:
                 lines_edited.append(line)
                 iline += 1
@@ -56,7 +58,7 @@ def format_comments(text, thres_len = 92):
             iline_comment_head = iline
             iline += 1
 
-            # コメント終了まで先読み
+            # Proceed to the end of the comment
             while re.match('^"""\s*', lines_orig[iline]) is None:
                 iline += 1
 
@@ -83,7 +85,7 @@ def extract_signature(lines, iline):
             if c == ')':
                 stack -= 1
                 if stack == 0:
-                    return_type = extract_return_type(line[i+1:])
+                    return_types = extract_return_types(line[i+1:])
                     break             
         if stack == 0:
             break
@@ -93,36 +95,44 @@ def extract_signature(lines, iline):
     if signature[len(signature)-2:] == ',)':
         signature = signature[:len(signature)-2] + ')'
 
-    if len(return_type) > 0:
-        signature += '::'+ return_type
-        
     arg_names, arg_types, kwarg_names, kwarg_types = extract_arguments(signature)
     
-    return signature, arg_names, arg_types, kwarg_names, kwarg_types, return_type
+    return signature, arg_names, arg_types, kwarg_names, kwarg_types, return_types
 
 
-def extract_return_type(line):
-    if line[0:2] == '::':
+def extract_return_types(line):
+    return_types = []
+    
+    if line[0:len('::')] == '::':
+        # Ignore outermost 'Tuple'
+        line = line[len('::Tuple{'):] \
+            if line[0:len('::Tuple{')] == '::Tuple{' \
+            else line[len('::'):]
+        
         return_type = ''
         stack = 0
-        
-        for i in range(2, len(line)):
-            c = line[i]
-            if stack == 0 and c in {' ', '='}:
+
+        for c in line:
+            if stack == 0 and c == '}':
                 break
-                
-            return_type += c
             
+            if stack == 0 and len(return_type) > 0 and c in {',', ' ', '='}:
+                return_types.append(return_type)
+                return_type = ''
+                continue
+                
+            if len(return_type) > 0 or c not in {',', ' ', '='}:
+                return_type += c
+              
             if c == '{':
                 stack += 1
             if c == '}':
                 stack -= 1
-                if stack == 0:
-                    break
         
-        return return_type
-    else:
-        return ''
+        if len(return_type) > 0:
+            return_types.append(return_type)
+    
+    return return_types
 
 
 def extract_arguments(signature):
@@ -182,30 +192,36 @@ def extract_arguments(signature):
     return arg_names, arg_types, kwarg_names, kwarg_types
 
 
-def shorten_signature(signature, arg_types, kwarg_types, return_type, thres_len):
+def shorten_signature(signature, arg_types, kwarg_types, thres_len):
     contains_type = True
 
     if len(signature) <= thres_len:
         return signature, contains_type
 
+    # Remove types
     contains_type = False
         
-    for arg_type in arg_types.values():
-        signature = signature.replace('::'+ arg_type, '')
+    for arg_name, arg_type in arg_types.items():
+        if '=' in arg_type:
+            if ', '+ arg_name in signature:
+                signature = signature.replace(', '+ arg_name +'::'+ arg_type, '[, '+ arg_name +']')
+            else:
+                signature = signature.replace(arg_name +'::'+ arg_type, '['+ arg_name +']')
+        else:
+            signature = signature.replace('::'+ arg_type, '')
 
     for arg_type in kwarg_types.values():
         signature = signature.replace('::'+ arg_type, '')
-        
-    signature = signature[0:signature.rfind(')')] + ')::'+ return_type
 
+    # Replace keywords arguments with '<keyword arguments>', if it's going to be short.
     kwarg_names = kwarg_types.keys()        
     if len(signature) <= thres_len or len(', '.join(kwarg_names)) < len('<keyword arguments>'):
         return signature, contains_type
 
-    return signature[0:signature.find(';')] + '; <keyword arguments>)::'+ return_type, contains_type
+    return signature[0:signature.find(';')] + '; <keyword arguments>)', contains_type
 
 
-def make_comment_lines(signature, contains_type, arg_names, arg_types, kwarg_names, kwarg_types, return_type, lines_orig, iline_comment_head, iline_comment_tail):
+def make_comment_lines(signature, contains_type, arg_names, arg_types, kwarg_names, kwarg_types, return_types, lines_orig, iline_comment_head, iline_comment_tail):
     arg_comments = {} if iline_comment_head == -1 \
         else extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg_names, kwarg_names)
 
@@ -213,15 +229,21 @@ def make_comment_lines(signature, contains_type, arg_names, arg_types, kwarg_nam
     comment_lines.append('\"\"\"')
     comment_lines.append((' ' * 4) + signature)
 
+    is_signature_line = True
+
     for iline in range(iline_comment_head + 1, iline_comment_tail):
         line = lines_orig[iline]
-        
+
         if re.match('^# Arguments', line) is not None:
             break
-           
+
         if re.match('\s+', line) is None:
+            is_signature_line = False
+
+        if not is_signature_line:
             comment_lines.append(line)
 
+    # Insert an empty line before '# Arguments' line.
     if comment_lines[len(comment_lines)-1] != '':
         comment_lines.append('')
 
@@ -259,10 +281,11 @@ def make_comment_lines(signature, contains_type, arg_names, arg_types, kwarg_nam
             return_comment_added = True
         break
 
-    if not return_comment_added and return_type != '':
+    if not return_comment_added and len(return_types) > 0:
         comment_lines.append('')
         comment_lines.append('# Returns')
-        comment_lines.append('- ')
+        for return_type in return_types:
+            comment_lines.append('- '+ return_type +': ')
         
     comment_lines.append('\"\"\"')
     return comment_lines

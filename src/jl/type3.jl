@@ -1,7 +1,7 @@
 function discretize(
     x::Vector{Tx},
-    y::Vector{Ty},
-    dist::Distribution;
+    y::Vector{Ty} = [1.0],
+    dist::Distribution = Nothing;
     maxnumbin::Int = typemax(Int),
     discretizemult::Float64 = 10000.0,
     mergegainoffset::Float64 = 14.0,
