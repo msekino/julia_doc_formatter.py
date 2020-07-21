@@ -210,8 +210,14 @@ def shorten_signature(signature, arg_types, kwarg_types, thres_len):
         else:
             signature = signature.replace('::'+ arg_type, '')
 
-    for arg_type in kwarg_types.values():
-        signature = signature.replace('::'+ arg_type, '')
+    for arg_name, arg_type in kwarg_types.items():
+        if '=' in arg_type:
+            if '; '+ arg_name in signature:
+                signature = signature.replace('; '+ arg_name +'::'+ arg_type, '[; '+ arg_name +']')
+            else:
+                signature = signature.replace(', '+ arg_name +'::'+ arg_type, '[, '+ arg_name +']')
+        else:
+            signature = signature.replace('::'+ arg_type, '')
 
     # Replace keywords arguments with '<keyword arguments>', if it's going to be short.
     kwarg_names = kwarg_types.keys()        
