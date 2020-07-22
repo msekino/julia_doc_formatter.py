@@ -200,19 +200,38 @@ def shorten_signature(signature, arg_types, kwarg_types, thres_len):
 
     # Remove types
     contains_type = False
-        
+    
     for arg_name, arg_type in arg_types.items():
-        signature = signature.replace('::'+ arg_type, '')
+        if '=' in arg_type:
+            signature = signature.replace('::'+ arg_type[0:arg_type.find(' =')], '')
+        else:
+            signature = signature.replace('::'+ arg_type, '')
 
     for arg_name, arg_type in kwarg_types.items():
-        signature = signature.replace('::'+ arg_type, '')
+        if '=' in arg_type:
+            signature = signature.replace('::'+ arg_type[0:arg_type.find(' =')], '')
+        else:
+            signature = signature.replace('::'+ arg_type, '')
+
+    if len(signature) <= thres_len:
+        return signature, contains_type
 
     # Replace keywords arguments with '<keyword arguments>', if it's going to be short.
     kwarg_names = kwarg_types.keys()        
-    if len(signature) <= thres_len or len(', '.join(kwarg_names)) < len('<keyword arguments>'):
+    if len(signature) <= thres_len or len(', '.join(kwarg_names)) > len('<keyword arguments>'):
+        signature = signature[0:signature.find(';')] + '; <keyword arguments>)'
+
+    if len(signature) <= thres_len:
         return signature, contains_type
 
-    return signature[0:signature.find(';')] + '; <keyword arguments>)', contains_type
+    # Remove default values
+    for arg_name, arg_type in arg_types.items():
+        signature = signature.replace(arg_type[arg_type.find(' ='):], '')
+
+    for arg_name, arg_type in kwarg_types.items():
+        signature = signature.replace(arg_type[arg_type.find(' ='):], '')
+    
+    return signature, contains_type    
 
 
 def make_comment_lines(signature, contains_type, arg_names, arg_types, kwarg_names, kwarg_types, return_types, lines_orig, iline_comment_head, iline_comment_tail):
