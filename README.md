@@ -1,1 +1,1 @@
-# julia_comment_formatter.py
+# julia_docstring_formatter.py
