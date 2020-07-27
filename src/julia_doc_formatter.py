@@ -262,7 +262,7 @@ def make_doc_lines(indent, signature, contains_type, arg_names, arg_types, kwarg
             doc_lines.append(indent + line)
 
     # Insert an empty line before '# Arguments' line.
-    if re.match('\S', doc_lines[len(doc_lines)-1]) is not None:
+    if re.match('^\s*\S', doc_lines[len(doc_lines)-1]) is not None:
         doc_lines.append(indent)
 
     doc_lines.append(indent +'# Arguments')
