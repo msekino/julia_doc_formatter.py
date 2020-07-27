@@ -2,19 +2,19 @@ import re
 import sys
 
 
-def format_comments(text, thres_len = 92):
+def format_docs(text, thres_len = 92):
     lines_orig = re.split('\n', text)
     lines_edited = []
 
-    iline_comment_head = -1
-    iline_comment_tail = -1  
+    iline_doc_head = -1
+    iline_doc_tail = -1  
     iline = 0
 
     while iline < len(lines_orig):
         # Detect the first line of a function
         line = lines_orig[iline]
         isfunc = \
-            iline_comment_tail > -1 or \
+            iline_doc_tail > -1 or \
             re.match('^\s*function', line) is not None or \
             re.match('^\S+\(', line) is not None
 
@@ -30,44 +30,44 @@ def format_comments(text, thres_len = 92):
             signature, contains_type \
                 = shorten_signature(signature, arg_types, kwarg_types, thres_len)
 
-            comment_lines = make_comment_lines(
+            doc_lines = make_doc_lines(
                 indent,
                 signature,
-                not contains_type,  # If the signature contains types, comment don't contain the types.
+                not contains_type,  # If the signature contains types, doc don't contain the types.
                 arg_names,
                 arg_types,
                 kwarg_names,
                 kwarg_types,
                 return_types,
                 lines_orig,
-                iline_comment_head,
-                iline_comment_tail
+                iline_doc_head,
+                iline_doc_tail
             )
 
-            lines_edited += comment_lines
+            lines_edited += doc_lines
             lines_edited.append(line)
 
-            iline_comment_head = -1
-            iline_comment_tail = -1
+            iline_doc_head = -1
+            iline_doc_tail = -1
             iline += 1
         else:
-            iline_comment_head = -1
-            iline_comment_tail = -1
+            iline_doc_head = -1
+            iline_doc_tail = -1
 
-            # Detect the first line of a comment
+            # Detect the first line of a doc
             if re.match('^\s*"""\s*', lines_orig[iline]) is None:
                 lines_edited.append(line)
                 iline += 1
                 continue
 
-            iline_comment_head = iline
+            iline_doc_head = iline
             iline += 1
 
-            # Proceed to the end of the comment
+            # Proceed to the end of the doc
             while re.match('^\s*"""\s*', lines_orig[iline]) is None:
                 iline += 1
 
-            iline_comment_tail = iline
+            iline_doc_tail = iline
             iline += 1
     
     return '\n'.join(lines_edited)
@@ -239,17 +239,17 @@ def shorten_signature(signature, arg_types, kwarg_types, thres_len):
     return signature, contains_type    
 
 
-def make_comment_lines(indent, signature, contains_type, arg_names, arg_types, kwarg_names, kwarg_types, return_types, lines_orig, iline_comment_head, iline_comment_tail):
-    arg_comments = {} if iline_comment_head == -1 \
-        else extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg_names, kwarg_names)
+def make_doc_lines(indent, signature, contains_type, arg_names, arg_types, kwarg_names, kwarg_types, return_types, lines_orig, iline_doc_head, iline_doc_tail):
+    arg_docs = {} if iline_doc_head == -1 \
+        else extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, arg_names, kwarg_names)
 
-    comment_lines = []
-    comment_lines.append(indent +'\"\"\"')
-    comment_lines.append(indent +(' ' * 4) + signature)
+    doc_lines = []
+    doc_lines.append(indent +'\"\"\"')
+    doc_lines.append(indent +(' ' * 4) + signature)
 
     is_signature_line = True
 
-    for iline in range(iline_comment_head + 1, iline_comment_tail):
+    for iline in range(iline_doc_head + 1, iline_doc_tail):
         line = lines_orig[iline][len(indent):]
 
         if re.match('^# Arguments', line) is not None:
@@ -259,62 +259,62 @@ def make_comment_lines(indent, signature, contains_type, arg_names, arg_types, k
             is_signature_line = False
 
         if not is_signature_line:
-            comment_lines.append(indent + line)
+            doc_lines.append(indent + line)
 
     # Insert an empty line before '# Arguments' line.
-    if re.match('\S', comment_lines[len(comment_lines)-1]) is not None:
-        comment_lines.append(indent)
+    if re.match('\S', doc_lines[len(doc_lines)-1]) is not None:
+        doc_lines.append(indent)
 
-    comment_lines.append(indent +'# Arguments')
+    doc_lines.append(indent +'# Arguments')
     
     for arg_name in arg_names:
-        comment = arg_comments[arg_name] if arg_name in arg_comments else ' '
+        doc = arg_docs[arg_name] if arg_name in arg_docs else ' '
 
         arg_type = arg_types[arg_name]
         if contains_type:
-            comment_lines.append(indent +'- `'+ arg_name +'::'+ arg_type +'`:'+ comment)
+            doc_lines.append(indent +'- `'+ arg_name +'::'+ arg_type +'`:'+ doc)
         else:
-            comment_lines.append(indent +'- '+ arg_name +':'+ comment)
+            doc_lines.append(indent +'- '+ arg_name +':'+ doc)
             
     for arg_name in kwarg_names:
-        comment = arg_comments[arg_name] if arg_name in arg_comments else ' '
+        doc = arg_docs[arg_name] if arg_name in arg_docs else ' '
         
         arg_type = kwarg_types[arg_name]
         if contains_type:
-            comment_lines.append(indent +'- `; '+ arg_name +'::'+ arg_type +'`:'+ comment)
+            doc_lines.append(indent +'- `; '+ arg_name +'::'+ arg_type +'`:'+ doc)
         else:
-            comment_lines.append(indent +'- ; '+ arg_name +':'+ comment)
+            doc_lines.append(indent +'- ; '+ arg_name +':'+ doc)
     
-    return_comment_added = False
+    return_doc_added = False
 
-    for iline in range(iline_comment_head + 1, iline_comment_tail):
+    for iline in range(iline_doc_head + 1, iline_doc_tail):
         line = lines_orig[iline][len(indent):]
 
         if re.match('^# Returns', line) is None:
             continue
 
-        comment_lines.append(indent)
+        doc_lines.append(indent)
 
-        for iline2 in range(iline, iline_comment_tail):
+        for iline2 in range(iline, iline_doc_tail):
             line = lines_orig[iline2][len(indent):]
-            comment_lines.append(indent + line)
-            return_comment_added = True
+            doc_lines.append(indent + line)
+            return_doc_added = True
         break
 
-    if not return_comment_added and len(return_types) > 0:
-        comment_lines.append('')
-        comment_lines.append(indent +'# Returns')
+    if not return_doc_added and len(return_types) > 0:
+        doc_lines.append('')
+        doc_lines.append(indent +'# Returns')
         for return_type in return_types:
-            comment_lines.append(indent +'- '+ return_type +': ')
+            doc_lines.append(indent +'- '+ return_type +': ')
         
-    comment_lines.append(indent +'\"\"\"')
-    return comment_lines
+    doc_lines.append(indent +'\"\"\"')
+    return doc_lines
 
 
-def extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg_names, kwarg_names):
-    arg_comments = {}
+def extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, arg_names, kwarg_names):
+    arg_docs = {}
 
-    for iline in range(iline_comment_head + 1, iline_comment_tail):
+    for iline in range(iline_doc_head + 1, iline_doc_tail):
         line = lines_orig[iline]
             
         if re.match('^\s*-\s', line) is None:
@@ -325,7 +325,7 @@ def extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg
                 i1 = line.rfind('::')
                 i2 = line.rfind(':')                
                 if i2 > i1 + 1:
-                    arg_comments[arg_name] = line[line.rfind(':') + 1:]
+                    arg_docs[arg_name] = line[line.rfind(':') + 1:]
                 break
 
         for arg_name in kwarg_names:
@@ -333,10 +333,10 @@ def extract_arg_comments(lines_orig, iline_comment_head, iline_comment_tail, arg
                 i1 = line.rfind('::')
                 i2 = line.rfind(':')                
                 if i2 > i1 + 1:
-                    arg_comments[arg_name] = line[line.rfind(':') + 1:]
+                    arg_docs[arg_name] = line[line.rfind(':') + 1:]
                 break
 
-    return arg_comments
+    return arg_docs
 
 
 def main():
@@ -344,7 +344,7 @@ def main():
     thres_len = int(sys.argv[2]) if len(sys.argv) >= 3 else 92
     
     with open(file, encoding='utf-8') as f:
-        text = format_comments(f.read(), thres_len)
+        text = format_docs(f.read(), thres_len)
     with open(file, 'w', encoding='utf-8') as f:
         f.write(text)
 
