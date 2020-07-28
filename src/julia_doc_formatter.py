@@ -1,6 +1,7 @@
 import re
 import sys
 
+from collections import OrderedDict 
 
 def format_docs(text, thres_len = 92):
     lines_orig = re.split('\n', text)
@@ -24,20 +25,15 @@ def format_docs(text, thres_len = 92):
             else:
                 indent = ''
             
-            signature, arg_names, arg_types, kwarg_names, kwarg_types, return_types \
-                = extract_signature(lines_orig, iline)
-
-            signature, contains_type \
-                = shorten_signature(signature, arg_types, kwarg_types, thres_len)
+            signature, args, kwargs, return_types = extract_signature(lines_orig, iline)
+            signature, contains_type = shorten_signature(signature, args, kwargs, thres_len)
 
             doc_lines = make_doc_lines(
                 indent,
                 signature,
                 not contains_type,  # If the signature contains types, doc don't contain the types.
-                arg_names,
-                arg_types,
-                kwarg_names,
-                kwarg_types,
+                args,
+                kwargs,
                 return_types,
                 lines_orig,
                 iline_doc_head,
@@ -100,9 +96,9 @@ def extract_signature(lines, iline):
     if signature[len(signature)-2:] == ',)':
         signature = signature[:len(signature)-2] + ')'
 
-    arg_names, arg_types, kwarg_names, kwarg_types = extract_arguments(signature)
+    args, kwargs = extract_arguments(signature)
     
-    return signature, arg_names, arg_types, kwarg_names, kwarg_types, return_types
+    return signature, args, kwargs, return_types
 
 
 def extract_return_types(line):
@@ -143,10 +139,8 @@ def extract_return_types(line):
 def extract_arguments(signature):
     body = signature[signature.find('(') + 1:signature.rfind(')')]
 
-    arg_names = []
-    arg_types = {}
-    kwarg_names = []
-    kwarg_types = {}
+    args = OrderedDict()
+    kwargs = OrderedDict()
     
     arg_name = ''
     arg_type = ''
@@ -160,8 +154,7 @@ def extract_arguments(signature):
         elif c == ':':
             has_colon = True
         elif c == ';':
-            arg_names.append(arg_name)
-            arg_types[arg_name] = arg_type
+            args[arg_name] = arg_type
             arg_name = ''
             arg_type = ''
             has_colon = False
@@ -174,11 +167,9 @@ def extract_arguments(signature):
             stack -= 1
         elif stack == 0 and c == ',':
             if has_semicolon:
-                kwarg_names.append(arg_name)
-                kwarg_types[arg_name] = arg_type
+                kwargs[arg_name] = arg_type
             else:
-                arg_names.append(arg_name)
-                arg_types[arg_name] = arg_type                
+                args[arg_name] = arg_type
             arg_name = ''            
             arg_type = ''
             has_colon = False
@@ -188,16 +179,14 @@ def extract_arguments(signature):
             arg_name += c
 
     if has_semicolon:
-        kwarg_names.append(arg_name)
-        kwarg_types[arg_name] = arg_type
+        kwargs[arg_name] = arg_type
     else:
-        arg_names.append(arg_name)
-        arg_types[arg_name] = arg_type
+        args[arg_name] = arg_type
     
-    return arg_names, arg_types, kwarg_names, kwarg_types
+    return args, kwargs
 
 
-def shorten_signature(signature, arg_types, kwarg_types, thres_len):
+def shorten_signature(signature, args, kwargs, thres_len):
     contains_type = True
 
     if len(signature) <= thres_len:
@@ -206,13 +195,13 @@ def shorten_signature(signature, arg_types, kwarg_types, thres_len):
     # Remove types
     contains_type = False
     
-    for arg_name, arg_type in arg_types.items():
+    for arg_name, arg_type in args.items():
         if '=' in arg_type:
             signature = signature.replace('::'+ arg_type[0:arg_type.find(' =')], '')
         else:
             signature = signature.replace('::'+ arg_type, '')
 
-    for arg_name, arg_type in kwarg_types.items():
+    for arg_name, arg_type in kwargs.items():
         if '=' in arg_type:
             signature = signature.replace('::'+ arg_type[0:arg_type.find(' =')], '')
         else:
@@ -222,7 +211,7 @@ def shorten_signature(signature, arg_types, kwarg_types, thres_len):
         return signature, contains_type
 
     # Replace keywords arguments with '<keyword arguments>', if it's going to be short.
-    kwarg_names = kwarg_types.keys()        
+    kwarg_names = kwargs.keys()        
     if len(signature) <= thres_len or len(', '.join(kwarg_names)) > len('<keyword arguments>'):
         signature = signature[0:signature.find(';')] + '; <keyword arguments>)'
 
@@ -230,18 +219,18 @@ def shorten_signature(signature, arg_types, kwarg_types, thres_len):
         return signature, contains_type
 
     # Remove default values
-    for arg_name, arg_type in arg_types.items():
+    for arg_name, arg_type in args.items():
         signature = signature.replace(arg_type[arg_type.find(' ='):], '')
 
-    for arg_name, arg_type in kwarg_types.items():
+    for arg_name, arg_type in kwargs.items():
         signature = signature.replace(arg_type[arg_type.find(' ='):], '')
     
     return signature, contains_type    
 
 
-def make_doc_lines(indent, signature, contains_type, arg_names, arg_types, kwarg_names, kwarg_types, return_types, lines_orig, iline_doc_head, iline_doc_tail):
+def make_doc_lines(indent, signature, contains_type, args, kwargs, return_types, lines_orig, iline_doc_head, iline_doc_tail):
     arg_docs = {} if iline_doc_head == -1 \
-        else extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, arg_names, kwarg_names)
+        else extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, args, kwargs)
 
     doc_lines = []
     doc_lines.append(indent +'\"\"\"')
@@ -267,19 +256,17 @@ def make_doc_lines(indent, signature, contains_type, arg_names, arg_types, kwarg
 
     doc_lines.append(indent +'# Arguments')
     
-    for arg_name in arg_names:
+    for arg_name, arg_type in args.items():
         doc = arg_docs[arg_name] if arg_name in arg_docs else ' '
 
-        arg_type = arg_types[arg_name]
         if contains_type:
             doc_lines.append(indent +'- `'+ arg_name +'::'+ arg_type +'`:'+ doc)
         else:
             doc_lines.append(indent +'- '+ arg_name +':'+ doc)
             
-    for arg_name in kwarg_names:
+    for arg_name, arg_type in kwargs.items():
         doc = arg_docs[arg_name] if arg_name in arg_docs else ' '
         
-        arg_type = kwarg_types[arg_name]
         if contains_type:
             doc_lines.append(indent +'- `; '+ arg_name +'::'+ arg_type +'`:'+ doc)
         else:
@@ -311,7 +298,7 @@ def make_doc_lines(indent, signature, contains_type, arg_names, arg_types, kwarg
     return doc_lines
 
 
-def extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, arg_names, kwarg_names):
+def extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, args, kwargs):
     arg_docs = {}
 
     for iline in range(iline_doc_head + 1, iline_doc_tail):
@@ -320,7 +307,7 @@ def extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, arg_names, kwar
         if re.match('^\s*-\s', line) is None:
             continue
         
-        for arg_name in arg_names:
+        for arg_name in args.keys():
             if re.match('^\s*-\s`?'+ arg_name +':', line):
                 i1 = line.rfind('::')
                 i2 = line.rfind(':')                
@@ -328,7 +315,7 @@ def extract_arg_docs(lines_orig, iline_doc_head, iline_doc_tail, arg_names, kwar
                     arg_docs[arg_name] = line[line.rfind(':') + 1:]
                 break
 
-        for arg_name in kwarg_names:
+        for arg_name in kwargs.keys():
             if re.match('^\s*-\s`?(; )?'+ arg_name +':', line):
                 i1 = line.rfind('::')
                 i2 = line.rfind(':')                
