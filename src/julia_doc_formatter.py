@@ -120,7 +120,10 @@ def extract_return_types(line):
             if stack == 0 and len(return_type) > 0 and c in {',', ' ', '='}:
                 return_types.append(return_type)
                 return_type = ''
-                continue
+                if c in {',', '='}:
+                    continue
+                else:
+                    break
                 
             if len(return_type) > 0 or c not in {',', ' ', '='}:
                 return_type += c
@@ -260,7 +263,10 @@ def make_doc_lines(indent, signature, contains_type, args, kwargs, return_types,
         doc = arg_docs[arg_name] if arg_name in arg_docs else ' '
 
         if contains_type:
-            doc_lines.append(indent +'- `'+ arg_name +'::'+ arg_type +'`:'+ doc)
+            if len(arg_type) > 0:
+                doc_lines.append(indent +'- `'+ arg_name +'::'+ arg_type +'`:'+ doc)
+            else:
+                doc_lines.append(indent +'- `'+ arg_name +'`:'+ doc)
         else:
             doc_lines.append(indent +'- '+ arg_name +':'+ doc)
             
@@ -268,7 +274,10 @@ def make_doc_lines(indent, signature, contains_type, args, kwargs, return_types,
         doc = arg_docs[arg_name] if arg_name in arg_docs else ' '
         
         if contains_type:
-            doc_lines.append(indent +'- `; '+ arg_name +'::'+ arg_type +'`:'+ doc)
+            if len(arg_type) > 0:
+                doc_lines.append(indent +'- `; '+ arg_name +'::'+ arg_type +'`:'+ doc)
+            else:
+                doc_lines.append(indent +'- `; '+ arg_name +'`:'+ doc)
         else:
             doc_lines.append(indent +'- ; '+ arg_name +':'+ doc)
     
